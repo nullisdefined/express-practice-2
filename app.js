@@ -26,7 +26,7 @@ app.post('/users', (req, res) => {
         db.set(keyId++, userObj);
         res.json({ message: `${userName}님, 반갑습니다!` });
     } else {
-        res.status(400).json({ message: "잘못된 요청입니다." });
+        res.status(400).json({ message: '잘못된 요청입니다.' });
     }
 });
 
@@ -52,7 +52,7 @@ app.get('/users', (req, res) => {
     if(db.size) {
         res.json(Array.from(db.values()));
     } else {
-        res.status(404).json({ message: "등록된 회원정보가 없습니다."});
+        res.status(404).json({ message: '등록된 회원정보가 없습니다.' });
     }
 });
 
@@ -60,8 +60,12 @@ app.get('/users', (req, res) => {
 app.delete('/users/:id', (req, res) => {
     const reqId = parseInt(req.params.id);
     const userObj = db.get(reqId);
-    db.delete(reqId);
-    res.json({ message: `${userObj.name}님, 회원탈퇴 되었습니다.` });
+    if(db.get(reqId)) {
+        db.delete(reqId);
+        res.json({ message: `${userObj.name}님, 회원탈퇴 되었습니다.` });
+    } else {
+        res.status(404).json({ message: '등록된 회원정보가 없습니다.' });
+    }
 });
 
 app.use((req, res, next) => {
