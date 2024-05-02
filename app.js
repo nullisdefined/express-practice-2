@@ -24,7 +24,7 @@ app.post('/users', (req, res) => {
 
     if(userName && userId && userPwd) {
         db.set(keyId++, userObj);
-        res.json({ message: `${userName}님, 반갑습니다!` });
+        res.status(201).json({ message: `${userName}님, 반갑습니다!` });
     } else {
         res.status(400).json({ message: '잘못된 요청입니다.' });
     }
