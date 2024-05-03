@@ -16,7 +16,7 @@ app.get('/', (req, res) => {
 });
 
 // 회원 가입
-app.post('/users', (req, res) => {
+app.post('/join', (req, res) => {
     const userObj = req.body;
     const userName = userObj.name;
     const userId = userObj.id;
@@ -38,7 +38,7 @@ app.post('/login', (req, res) => {
     if(dbArray.some((user) => user.id === id && user.pwd === pwd)) {
         res.json({ message: `${id}님, 반갑습니다!` });
     } else {
-        res.json({ message: '아이디 또는 비밀번호가 올바르지 않습니다.' });
+        res.status(404).json({ message: '아이디 또는 비밀번호가 올바르지 않습니다.' });
     }
 });
 
