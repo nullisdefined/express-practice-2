@@ -31,8 +31,15 @@ app.post('/users', (req, res) => {
 });
 
 // 로그인
-app.get('/login', (req, res) => {
-    
+app.post('/login', (req, res) => {
+    const { id, pwd } = req.body;
+
+    const dbArray = Array.from(db.values());
+    if(dbArray.some((user) => user.id === id && user.pwd === pwd)) {
+        res.json({ message: `${id}님, 반갑습니다!` });
+    } else {
+        res.json({ message: '아이디 또는 비밀번호가 올바르지 않습니다.' });
+    }
 });
 
 // 개별 회원 조회
