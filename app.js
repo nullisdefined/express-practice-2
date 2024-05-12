@@ -9,9 +9,6 @@ app.set('port', process.env.PORT || 3333);
 app.use(express.json());
 app.use(morgan('dev'));
 
-const db = new Map();
-let keyId = 1;
-
 app.get('/', (req, res) => {
     res.send('main');
 });
@@ -25,8 +22,6 @@ app.post('/join', async(req, res) => {
 
     if(userName && userEmail && userPwd) {
         try {
-            // db.set(keyId++, userObj);
-            // res.status(201).json({ message: `${userName}님, 반갑습니다!` });
             await connection.execute(
                 'INSERT INTO users (name, email, pwd) VALUES (?, ?, ?)',
                 [userName, userEmail, userPwd]
@@ -45,18 +40,11 @@ app.post('/join', async(req, res) => {
 app.post('/login', async(req, res) => {
     const { email, pwd } = req.body;
 
-    // const dbArray = Array.from(db.values());
-    // if(dbArray.some((user) => user.email === email && user.pwd === pwd)) {
-    //     res.json({ message: `${email}님, 반갑습니다!` });
-    // } else {
-    //     res.status(404).json({ message: '아이디 또는 비밀번호가 올바르지 않습니다.' });
-    // }
-
     try {
         const [rows] = await connection.execute('SELECT * FROM users WHERE email = ? AND pwd = ?',[email, pwd]);
 
         if(rows.length > 0) {
-            // console.log(rows);
+            console.log(rows[0]);
             res.json({ message: `${rows[0].name}님, 반갑습니다!` });
         } else {
             res.status(404).json({ message: '아이디 또는 비밀번호가 올바르지 않습니다.' });
@@ -70,13 +58,6 @@ app.post('/login', async(req, res) => {
 // 개별 회원 조회
 app.get('/users/:id', async(req, res) => {
     const reqId = parseInt(req.params.id);
-    // const userObj = db.get(reqId);
-    
-    // if(userObj) {
-    //     res.json(userObj);
-    // } else {
-    //     res.status(404).json({ message: '잘못된 요청입니다.' })
-    // }
 
     try {
         const [rows] = await connection.execute('SELECT * FROM users WHERE id = ?', [reqId]);
@@ -94,12 +75,6 @@ app.get('/users/:id', async(req, res) => {
 
 // 전체 회원 조회
 app.get('/users', async (req, res) => {
-    // if(db.size) {
-    //     res.json(Array.from(db.values()));
-    // } else {
-    //     res.status(404).json({ message: '등록된 회원정보가 없습니다.' });
-    // }
-
     try {
         const [rows] = await connection.execute('SELECT * FROM users');
         if (rows.length > 0) {
@@ -116,13 +91,6 @@ app.get('/users', async (req, res) => {
 // 회원 탈퇴
 app.delete('/users/:id', async(req, res) => {
     const reqId = parseInt(req.params.id);
-    // const userObj = db.get(reqId);
-    // if(db.get(reqId)) {
-    //     db.delete(reqId);
-    //     res.json({ message: `${userObj.name}님, 회원탈퇴 되었습니다.` });
-    // } else {
-    //     res.status(404).json({ message: '등록된 회원정보가 없습니다.' });
-    // }
 
     try {
         const [rows] = await connection.execute('SELECT * FROM users WHERE id = ?', [reqId]);
