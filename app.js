@@ -1,6 +1,7 @@
 const express = require('express');
 const morgan = require('morgan');
 const connection = require('./database/connection');
+const { body, validationResult } = require('express-validator');
 
 const app = express();
 
@@ -14,45 +15,60 @@ app.get('/', (req, res) => {
 });
 
 // 회원 가입
-app.post('/join', async(req, res) => {
-    const userObj = req.body;
-    const userName = userObj.name;
-    const userEmail = userObj.email;
-    const userPwd = userObj.pwd;
+app.post('/join', 
+    [
+        body('name').notEmpty().withMessage('이름을 입력해주세요.'),
+        body('email').isEmail().withMessage('유효한 이메일을 입력해주세요.'),
+        body('pwd').isLength({ min: 6 }).withMessage('비밀번호는 최소 6자 이상이어야 합니다.')
+    ],
+    async(req, res) => {
+        const errors = validationResult(req);
+        if(!errors.isEmpty()) {
+            return res.status(400).json({ errors: errors.array() });
+        }
 
-    if(userName && userEmail && userPwd) {
+        const { name, email, pwd } = req.body;
+
         try {
+            console.log('***', pwd);
             await connection.execute(
                 'INSERT INTO users (name, email, pwd) VALUES (?, ?, ?)',
-                [userName, userEmail, userPwd]
+                [name, email, pwd]
             );
-            res.status(201).json({ message: `${userName}님, 반갑습니다!`});
+            res.status(201).json({ message: `${name}님, 반갑습니다!`});
         } catch (error) {
             console.error(error);
             res.json({ message: '서버 오류가 발생했습니다.'});
         }
-    } else {
-        res.status(400).json({ message: '잘못된 요청입니다.' });
-    }
 });
 
 // 로그인
-app.post('/login', async(req, res) => {
-    const { email, pwd } = req.body;
-
-    try {
-        const [rows] = await connection.execute('SELECT * FROM users WHERE email = ? AND pwd = ?',[email, pwd]);
-
-        if(rows.length > 0) {
-            console.log(rows[0]);
-            res.json({ message: `${rows[0].name}님, 반갑습니다!` });
-        } else {
-            res.status(404).json({ message: '아이디 또는 비밀번호가 올바르지 않습니다.' });
+app.post('/login',
+    [
+        body('email').notEmpty().isEmail().withMessage('유효한 이메일을 입력해주세요.'),
+        body('pwd').notEmpty().withMessage('비밀번호를 입력해주세요.')
+    ],
+    async(req, res) => {
+        const errors = validationResult(req);
+        if(!errors.isEmpty()) {
+            return res.status(400).json({ errors: errors.array() });
         }
-    } catch(error) {
-        console.error(error);
-        res.status(500).json({ message: '서버 오류가 발생했습니다.' });
-    }
+
+        const { email, pwd } = req.body;
+
+        try {
+            const [rows] = await connection.execute('SELECT * FROM users WHERE email = ? AND pwd = ?',[email, pwd]);
+
+            if(rows.length > 0) {
+                console.log(rows[0]);
+                res.json({ message: `${rows[0].name}님, 반갑습니다!` });
+            } else {
+                res.status(404).json({ message: '이메일 또는 비밀번호가 올바르지 않습니다.' });
+            }
+        } catch(error) {
+            console.error(error);
+            res.status(500).json({ message: '서버 오류가 발생했습니다.' });
+        }
 });
 
 // 개별 회원 조회
