@@ -2,6 +2,7 @@ const express = require('express');
 const morgan = require('morgan');
 const dotenv = require('dotenv');
 const jwt = require('jsonwebtoken');
+const cookieParser = require('cookie-parser');
 const connection = require('./database/connection');
 const { body, param, validationResult } = require('express-validator');
 
@@ -11,6 +12,7 @@ app.set('port', process.env.PORT || 3333);
 app.set('secretKey', process.env.SECRET_KEY);
 app.use(express.json());
 app.use(morgan('dev'));
+app.use(cookieParser());
 
 // 유효성 검사 미들웨어 정의
 const validate = (req, res, next) => {
@@ -21,31 +23,11 @@ const validate = (req, res, next) => {
     next();
 };
 
-// JWT 생성 미들웨어 정의
-const generateToken = (req, res) => {
-    try {
-        const payload = {
-            email: req.user.email,
-            username: req.user.name 
-        };
-        const options = {
-            expiresIn: '1h'
-        };
-        const token = jwt.sign(payload, app.get('secretKey'), options);
-        res.json({ token });
-
-    } catch(error) {
-        console.error(error);
-        res.status(500).json({ message: '서버 오류가 발생했습니다.' })
-    }
-};
-
 // JWT 인증 미들웨어 정의
 const authenticateToken = (req, res, next) => {
-    const authHeader = req.headers['authorization'];
-    const token = authHeader && authHeader.split(' ')[1];
+    const token = req.cookies.token;
 
-    if(token == null) return res.status(401).json({ message: '로그인이 필요합니다.' });
+    if(!token) return res.status(401).json({ message: '로그인이 필요합니다.' });
 
     jwt.verify(token, app.get('secretKey'), (err, user) => {
         if(err) {
@@ -80,12 +62,22 @@ const loginHandler = async(req, res, next) => {
         const [rows] = await connection.execute('SELECT * FROM users WHERE email = ? AND pwd = BINARY ?',[email, pwd]);
 
         if(rows.length > 0) {
-            // console.log(rows[0]);
-            // res.json({ message: `${rows[0].name}님, 반갑습니다!` });
-            req.user = rows[0];
-            next();
+            const payload = {
+                email: rows[0].email,
+                username: rows[0].name
+            };
+            const options = {
+                expiresIn: '3m'
+            };
+            const token = jwt.sign(payload, app.get('secretKey'), options);
+    
+            res.cookie('token', token, {
+                httpOnly: true,
+                maxAge: 24 * 60 * 60 * 1000,
+            });
+            res.json({ message: `${rows[0].name}님 반갑습니다!` });
         } else {
-            res.status(404).json({ message: '이메일 또는 비밀번호가 올바르지 않습니다.' });
+            res.status(403).json({ message: '이메일 또는 비밀번호가 올바르지 않습니다.' });
         }
     } catch(error) {
         console.error(error);
@@ -161,6 +153,11 @@ const updateUserPasswordHandler = async(req, res) => {
     }
 };
 
+const logoutHandler = (req, res) => {
+    res.clearCookie('token');
+    res.json({ message: '로그아웃되었습니다.' });
+};
+
 // 라우터 정의
 app.post('/join', 
     [
@@ -178,13 +175,13 @@ app.post('/login',
         body('pwd').notEmpty().withMessage('비밀번호를 입력해주세요.')
     ],
     validate,
-    loginHandler,
-    generateToken
+    loginHandler
 );
 
 app.get('/users/:id',
     param('id').notEmpty().isInt().withMessage('정수 id를 입력해주세요.'),
     validate,
+    authenticateToken,
     getUserHandler 
 );
 
@@ -196,6 +193,7 @@ app.get('/users',
 app.delete('/users/:id', 
     param('id').notEmpty().isInt().withMessage('정수 id를 입력해주세요.'),
     validate,
+    authenticateToken,
     deleteUserHandler
 );
 
@@ -205,7 +203,13 @@ app.put('/users/:id',
         body('newPwd').notEmpty().withMessage('비밀번호는 최소 6자 이상이어야 합니다.')
     ],
     validate,
+    authenticateToken,
     updateUserPasswordHandler
+);
+
+app.get('/logout', 
+    authenticateToken,
+    logoutHandler
 );
 
 // 에러 처리 미들웨어
