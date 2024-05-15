@@ -1,10 +1,14 @@
 const express = require('express');
 const morgan = require('morgan');
+const dotenv = require('dotenv');
+const jwt = require('jsonwebtoken');
 const connection = require('./database/connection');
 const { body, param, validationResult } = require('express-validator');
 
 const app = express();
+dotenv.config();
 app.set('port', process.env.PORT || 3333);
+app.set('secretKey', process.env.SECRET_KEY);
 app.use(express.json());
 app.use(morgan('dev'));
 
@@ -16,6 +20,43 @@ const validate = (req, res, next) => {
     }
     next();
 };
+
+// JWT 생성 미들웨어 정의
+const generateToken = (req, res) => {
+    try {
+        const payload = {
+            email: req.user.email,
+            username: req.user.name 
+        };
+        const options = {
+            expiresIn: '1h'
+        };
+        const token = jwt.sign(payload, app.get('secretKey'), options);
+        res.json({ token });
+
+    } catch(error) {
+        console.error(error);
+        res.status(500).json({ message: '서버 오류가 발생했습니다.' })
+    }
+};
+
+// JWT 인증 미들웨어 정의
+const authenticateToken = (req, res, next) => {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
+
+    if(token == null) return res.status(401).json({ message: '로그인이 필요합니다.' });
+
+    jwt.verify(token, app.get('secretKey'), (err, user) => {
+        if(err) {
+            console.error(err);
+            return res.status(403).json({ message: '권한이 없습니다.' });
+        }
+        req.user = user;
+        next();
+    });
+};
+
 // 핸들러 함수 정의
 const joinHandler = async(req, res) => {
     const { name, email, pwd } = req.body;
@@ -32,15 +73,17 @@ const joinHandler = async(req, res) => {
     }
 };
 
-const loginHandler = async(req, res) => {
+const loginHandler = async(req, res, next) => {
     const { email, pwd } = req.body;
 
     try {
         const [rows] = await connection.execute('SELECT * FROM users WHERE email = ? AND pwd = BINARY ?',[email, pwd]);
 
         if(rows.length > 0) {
-            console.log(rows[0]);
-            res.json({ message: `${rows[0].name}님, 반갑습니다!` });
+            // console.log(rows[0]);
+            // res.json({ message: `${rows[0].name}님, 반갑습니다!` });
+            req.user = rows[0];
+            next();
         } else {
             res.status(404).json({ message: '이메일 또는 비밀번호가 올바르지 않습니다.' });
         }
@@ -118,7 +161,7 @@ const updateUserPasswordHandler = async(req, res) => {
     }
 };
 
-// 회원 가입
+// 라우터 정의
 app.post('/join', 
     [
         body('name').notEmpty().isString().withMessage('이름을 입력해주세요.'),
@@ -129,34 +172,33 @@ app.post('/join',
     joinHandler
 );
 
-// 로그인
 app.post('/login',
     [
         body('email').notEmpty().isEmail().withMessage('유효한 이메일을 입력해주세요.'),
         body('pwd').notEmpty().withMessage('비밀번호를 입력해주세요.')
     ],
     validate,
-    loginHandler
+    loginHandler,
+    generateToken
 );
 
-// 개별 회원 조회
 app.get('/users/:id',
     param('id').notEmpty().isInt().withMessage('정수 id를 입력해주세요.'),
     validate,
     getUserHandler 
 );
 
-// 전체 회원 조회
-app.get('/users', getAllUsersHandler);
+app.get('/users', 
+    authenticateToken,
+    getAllUsersHandler
+);
 
-// 회원 탈퇴
 app.delete('/users/:id', 
     param('id').notEmpty().isInt().withMessage('정수 id를 입력해주세요.'),
     validate,
     deleteUserHandler
 );
 
-// 회원 비밀번호 수정
 app.put('/users/:id',
     [
         param('id').notEmpty().withMessage('id를 입력해주세요.').isInt().withMessage('정수 id를 입력해주세요.'),
@@ -166,6 +208,7 @@ app.put('/users/:id',
     updateUserPasswordHandler
 );
 
+// 에러 처리 미들웨어
 app.use((req, res, next) => {
     res.status(404).send('404 ERROR');
 });
@@ -173,8 +216,8 @@ app.use((req, res, next) => {
 app.use((err, req, res, next) => {
     console.error(err);
     res.send('ERROR');
-})
+});
 
 app.listen(app.get('port'), () => {
     console.log(app.get('port'), '번 서버 대기 중');
-})
+});
